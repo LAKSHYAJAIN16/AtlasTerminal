@@ -1,6 +1,6 @@
 import type { MarketDataProvider, Quote } from "./types";
 
-type FmpQuote = { symbol: string; name?: string; price?: number; change?: number; changesPercentage?: number; volume?: number; timestamp?: number; exchange?: string };
+type FmpQuote = { symbol: string; name?: string; price?: number; change?: number; changePercentage?: number; volume?: number; timestamp?: number; exchange?: string };
 
 /** Server-only adapter. Activate only after confirming commercial display rights. */
 export class FmpMarketDataProvider implements MarketDataProvider {
@@ -21,7 +21,7 @@ export class FmpMarketDataProvider implements MarketDataProvider {
       currency: "USD",
       price: quote.price,
       change: quote.change ?? 0,
-      changePercent: quote.changesPercentage ?? 0,
+      changePercent: quote.changePercentage ?? 0,
       volume: quote.volume ?? null,
       asOf: quote.timestamp ? new Date(quote.timestamp * 1000).toISOString() : new Date().toISOString(),
       delayMinutes: 15,
