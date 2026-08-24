@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   try {
     const quote = await getMarketDataProvider().getQuote(symbol);
-    return Response.json(quote, { headers: { "Cache-Control": "private, max-age=60" } });
+    return Response.json(quote, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load quote.";
     return Response.json({ error: message }, { status: 404 });

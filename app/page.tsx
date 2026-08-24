@@ -6,6 +6,7 @@ type Quote = { ticker: string; name: string; last: string; bid: string; ask: str
 type LiveQuote = { symbol: string; price: number; change: number; changePercent: number; volume: number | null; source: string; delayMinutes: number; asOf: string };
 type CompanyData = { profile: { companyName?: string; exchange?: string; marketCap?: number; industry?: string; sector?: string; fullTimeEmployees?: number; description?: string } | null; incomeStatement: Array<{ revenue?: number; grossProfit?: number; eps?: number }>; ratios: { priceToEarningsRatioTTM?: number; priceToSalesRatioTTM?: number; enterpriseValueMultipleTTM?: number; dividendYieldTTM?: number } | null };
 type Candle = { date: string; close: number };
+type NewsItem = { title?: string; created?: string; url?: string; source?: string; site?: string };
 
 const quotes: Quote[] = [
   { ticker: "NVDA", name: "NVIDIA Corp", last: "174.58", bid: "174.56", ask: "174.61", change: "+2.14%", volume: "188.4M", up: true },
@@ -39,22 +40,35 @@ export default function Home() {
   const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsError, setNewsError] = useState<string | null>(null);
   const current = useMemo(() => quotes.find((quote) => quote.ticker === symbol) ?? quotes[0], [symbol]);
   const focus = (ticker: string) => { setSymbol(ticker); setStatus(`${ticker} focused across linked panels`); };
-  const submit = (event: FormEvent) => { event.preventDefault(); const found = quotes.find((quote) => input.toUpperCase().includes(quote.ticker)); if (found) focus(found.ticker); else if (input.trim()) setStatus(`Command not found: ${input}`); setInput(""); };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const ticker = input.toUpperCase().split(/\s+/).find((token) => /^[A-Z]{1,5}(?:\.[A-Z])?$/.test(token));
+    if (ticker) focus(ticker); else if (input.trim()) setStatus("Enter a valid U.S. ticker symbol, for example: NVDA or chart MSFT.");
+    setInput("");
+  };
   const closePanel = (id: string) => { setHiddenPanels((current) => [...current, id]); setStatus(`${id} panel closed. Reload to restore the default workspace.`); };
   useEffect(() => {
     let active = true;
-    Promise.all(quotes.map(async ({ ticker }) => {
-      const response = await fetch(`/api/market/quote?symbol=${ticker}`);
-      if (!response.ok) throw new Error(ticker);
-      return await response.json() as LiveQuote;
-    })).then((results) => {
-      if (!active) return;
-      setLiveQuotes(Object.fromEntries(results.map((quote) => [quote.symbol, quote])));
-      setStatus(`FMP connected · ${results[0]?.delayMinutes ?? 15}-minute delayed quotes`);
-    }).catch(() => active && setStatus("Live quote connection unavailable; retrying on next refresh."));
-    return () => { active = false; };
+    const refreshQuotes = async () => {
+      try {
+        const results = await Promise.all(quotes.map(async ({ ticker }) => {
+          const response = await fetch(`/api/market/quote?symbol=${ticker}`, { cache: "no-store" });
+          if (!response.ok) throw new Error(ticker);
+          return await response.json() as LiveQuote;
+        }));
+        if (!active) return;
+        setLiveQuotes(Object.fromEntries(results.map((quote) => [quote.symbol, quote])));
+        const asOf = results[0]?.asOf ? new Date(results[0].asOf).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+        setStatus(`FMP quote refresh · ${asOf} · updates every 10 seconds`);
+      } catch { if (active) setStatus("Live quote connection unavailable; retrying in 10 seconds."); }
+    };
+    void refreshQuotes();
+    const interval = window.setInterval(() => { if (document.visibilityState === "visible") void refreshQuotes(); }, 10_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
   const activeQuote = liveQuotes[symbol];
   const activeLast = activeQuote ? price(activeQuote.price) : current.last;
@@ -70,6 +84,17 @@ export default function Home() {
       setCompany(companyResult as CompanyData | null);
       setCandles((candleResult?.candles ?? []) as Candle[]);
     });
+    return () => { active = false; };
+  }, [symbol]);
+  useEffect(() => {
+    let active = true;
+    setNews([]); setNewsError(null);
+    fetch(`/api/market/news?symbol=${symbol}`).then(async (response) => {
+      const body = await response.json() as { news?: NewsItem[]; error?: string };
+      if (!active) return;
+      if (!response.ok) { setNewsError(body.error ?? "News is unavailable for this data plan."); return; }
+      setNews(body.news ?? []);
+    }).catch(() => active && setNewsError("News connection unavailable."));
     return () => { active = false; };
   }, [symbol]);
   const chartPath = useMemo(() => {
@@ -90,7 +115,7 @@ export default function Home() {
     <div className="terminal-tabs">{["Research", "Markets", "Watchlists", "Screeners", "Alerts"].map((item) => <button type="button" key={item} className={workspace === item ? "on" : ""} onClick={() => { setWorkspace(item); setStatus(`${item} workspace selected`); }}>{item}</button>)}<span>US EQUITIES · 15 MIN DELAY</span></div>
     <div className="terminal-grid">
       {!hiddenPanels.includes("quote") && <Panel title="QUOTE MONITOR" className="monitor" linked={false} onClose={() => closePanel("quote")}><div className="panel-tabs"><b>Core Growth</b><button type="button" onClick={() => setStatus("AI watchlist selected")}>AI</button><button type="button" onClick={() => setStatus("Software watchlist selected")}>Software</button><button type="button" onClick={() => setStatus("Macro watchlist selected")}>Macro</button></div><div className="quote-table"><div className="quote-head"><span>TICKER</span><span>LAST</span><span>BID</span><span>ASK</span><span>CHG</span><span>VOL</span></div>{quotes.map((quote) => { const live = liveQuotes[quote.ticker]; const up = live ? live.change >= 0 : quote.up; return <button type="button" key={quote.ticker} onClick={() => focus(quote.ticker)} className={quote.ticker === symbol ? "quote-line selected" : "quote-line"}><span>{quote.ticker}</span><span>{live ? price(live.price) : quote.last}</span><span>{live ? "—" : quote.bid}</span><span>{live ? "—" : quote.ask}</span><span className={up ? "gain" : "loss"}>{live ? percent(live.changePercent) : quote.change}</span><span>{live?.volume ? number.format(live.volume) : quote.volume}</span></button>; })}</div><button type="button" className="add-row" onClick={() => setStatus("Instrument entry will be enabled with persisted watchlists")}>Add an instrument</button></Panel>}
-      {!hiddenPanels.includes("news") && <Panel title={`NEWS · ${symbol} US`} className="news" onClose={() => closePanel("news")}><div className="news-actions"><input placeholder="Search headlines"/><button type="button" onClick={() => setNewsSource((source) => source === "All sources" ? "Company news" : "All sources")}>{newsSource}</button><button type="button" onClick={() => setStatus("News filters toggled")}>Filters</button></div><div className="headline-list">{stories.map((story, index) => <button type="button" key={story} onClick={() => setStatus(`Story selected: ${story}`)}><time>{`${10 - index}:${index ? "1" : "4"}${index} ET`}</time><strong>{story}</strong><span>{index % 2 ? "Reuters" : "Market Wire"}</span></button>)}</div></Panel>}
+      {!hiddenPanels.includes("news") && <Panel title={`NEWS · ${symbol} US`} className="news" onClose={() => closePanel("news")}><div className="news-actions"><input placeholder="Search headlines"/><button type="button" onClick={() => setNewsSource((source) => source === "All sources" ? "Company news" : "All sources")}>{newsSource}</button><button type="button" onClick={() => setStatus("News filters will apply once the news provider is entitled")}>Filters</button></div><div className="headline-list">{newsError ? <p className="panel-message">{newsError}<br/><span>Configure an entitled FMP or Benzinga Newsfeed plan to enable this panel.</span></p> : news.length ? news.map((item, index) => <a key={item.url ?? `${item.title}-${index}`} href={item.url} target="_blank" rel="noreferrer"><time>{item.created ? new Date(item.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</time><strong>{item.title ?? "Untitled news item"}</strong><span>{item.source ?? item.site ?? "Licensed news"}</span></a>) : <p className="panel-message">Loading licensed news for {symbol}…</p>}</div></Panel>}
       {!hiddenPanels.includes("map") && <Panel title="MARKET MAP" className="map" linked={false} onClose={() => closePanel("map")}><div className="heatmap"><div className="heat one">MEGA CAP<b>+1.4%</b></div><div className="heat two">SOFTWARE<b>+0.8%</b></div><div className="heat red">HEALTH<b>-1.1%</b></div><div className="heat three">SEMIS<b>+2.3%</b></div><div className="heat four">FINANCIALS<b>+0.4%</b></div><div className="heat five">ENERGY<b>+1.0%</b></div><div className="heat six">INDUSTRIALS<b>+0.2%</b></div></div><footer>Universe: US large cap · 100 instruments</footer></Panel>}
       {!hiddenPanels.includes("research") && <Panel title={`COMPANY RESEARCH · ${symbol} US`} className="research" onClose={() => closePanel("research")}><div className="company-strip"><div className="company-mark">{symbol.slice(0, 1)}</div><div><h1>{companyName}</h1><p>{company?.profile?.exchange ?? "NASDAQ"} · {company?.profile?.industry ?? "Common stock"} · USD</p></div><div className={activeUp ? "last gain" : "last loss"}>{activeLast}<small>{activeChange}</small></div></div><div className="research-tabs">{["Snapshot", "Financials", "Filings", "Peers", "Estimates"].map((view) => <button type="button" key={view} className={researchView === view ? "on" : ""} onClick={() => { setResearchView(view); setStatus(`${view} selected for ${symbol}`); }}>{view}</button>)}</div><div className="research-layout"><div className="chart"><div className="chart-stat"><b>{researchView} · 1Y</b><span className={activeUp ? "gain" : "loss"}>{activeChange} today</span></div><svg viewBox="0 0 640 245" preserveAspectRatio="none"><path className="grid" d="M0 35H640M0 90H640M0 145H640M0 200H640"/><path className="candle" d={chartPath}/></svg><div className="chart-years"><span>1Y ago</span><span>9M</span><span>6M</span><span>Today</span></div></div><aside className="stats"><h2>{researchView}</h2>{[["Exchange", company?.profile?.exchange ?? "—"],["Market cap", compactMoney(company?.profile?.marketCap)],["P / Earnings", ratio?.priceToEarningsRatioTTM ? `${ratio.priceToEarningsRatioTTM.toFixed(1)}x` : "—"],["P / Sales", ratio?.priceToSalesRatioTTM ? `${ratio.priceToSalesRatioTTM.toFixed(1)}x` : "—"],["EV / EBITDA", ratio?.enterpriseValueMultipleTTM ? `${ratio.enterpriseValueMultipleTTM.toFixed(1)}x` : "—"],["Employees", company?.profile?.fullTimeEmployees?.toLocaleString() ?? "—"]].map(([name,value]) => <p key={name}><span>{name}</span><b>{value}</b></p>)}</aside></div><div className="mini-stats"><article><span>Revenue (annual)</span><b>{compactMoney(income?.revenue)}</b><em>FMP reported</em></article><article><span>Gross profit</span><b>{compactMoney(income?.grossProfit)}</b><em>FMP reported</em></article><article><span>Diluted EPS</span><b>{income?.eps?.toFixed(2) ?? "—"}</b><em>FMP reported</em></article><article><span>Dividend yield</span><b>{ratio?.dividendYieldTTM ? percent(ratio.dividendYieldTTM * 100) : "—"}</b><em>TTM</em></article></div></Panel>}
       <Panel title="MOST ACTIVE" className="active" linked={false}><div className="active-table"><div><span>SYMBOL</span><span>LAST</span><span>CHG</span><span>VOL</span></div>{movers.map((ticker, index) => <button key={ticker} onClick={() => ticker === "NVDA" && focus(ticker)}><strong>{ticker}</strong><span>{(22.3 + index * 7.12).toFixed(2)}</span><span className={index % 3 ? "gain" : "loss"}>{index % 3 ? "+" : "-"}{(index + .28).toFixed(2)}%</span><span>{(7 + index * 3.4).toFixed(1)}M</span></button>)}</div></Panel>
