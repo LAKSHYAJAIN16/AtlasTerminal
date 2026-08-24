@@ -1,18 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useAtlasLiveQuotes } from "@/lib/market/live-client";
 
 type Quote = { ticker: string; name: string };
-type LiveQuote = {
-  symbol: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number | null;
-  source: string;
-  delayMinutes: number;
-  asOf: string;
-};
 type CompanyData = {
   profile: {
     companyName?: string;
@@ -59,14 +50,6 @@ const benchmarks: Quote[] = [
   { ticker: "IWM", name: "Russell 2000" },
   { ticker: "TLT", name: "20+ Year Treasury" },
   { ticker: "UUP", name: "U.S. Dollar" },
-];
-const stories = [
-  "Semiconductor leadership remains broad into the afternoon",
-  "Cloud software names regain momentum as yields ease",
-  "Analysts raise compute estimates after supplier checks",
-  "Investors parse central-bank symposium remarks",
-  "Institutional ownership filings update across technology",
-  "Index futures hold gains as breadth improves",
 ];
 const number = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
@@ -121,12 +104,16 @@ function Panel({
 export default function Home() {
   const [symbol, setSymbol] = useState("NVDA");
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState("Delayed data · demo provider");
+  const [status, setStatus] = useState(
+    "Connecting to real-time market gateway…",
+  );
   const [workspace, setWorkspace] = useState("Research");
   const [researchView, setResearchView] = useState("Snapshot");
   const [newsSource, setNewsSource] = useState("All sources");
   const [hiddenPanels, setHiddenPanels] = useState<string[]>([]);
-  const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
+  const { quotes: liveQuotes, connection } = useAtlasLiveQuotes(
+    [...quotes, ...benchmarks].map(({ ticker }) => ticker),
+  );
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -157,50 +144,22 @@ export default function Home() {
     setStatus(`${id} panel closed. Reload to restore the default workspace.`);
   };
   useEffect(() => {
-    let active = true;
-    const refreshQuotes = async () => {
-      try {
-        const results = await Promise.all(
-          [...quotes, ...benchmarks].map(async ({ ticker }) => {
-            const response = await fetch(`/api/market/quote?symbol=${ticker}`, {
-              cache: "no-store",
-            });
-            if (!response.ok) throw new Error(ticker);
-            return (await response.json()) as LiveQuote;
-          }),
-        );
-        if (!active) return;
-        setLiveQuotes(
-          Object.fromEntries(results.map((quote) => [quote.symbol, quote])),
-        );
-        const asOf = results[0]?.asOf
-          ? new Date(results[0].asOf).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "—";
-        setStatus(`FMP quote refresh · ${asOf} · updates every 10 seconds`);
-      } catch {
-        if (active)
-          setStatus(
-            "Live quote connection unavailable; retrying in 10 seconds.",
-          );
-      }
-    };
-    void refreshQuotes();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshQuotes();
-    }, 10_000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, []);
+    if (connection === "live")
+      setStatus("Databento US Equities Mini · live gateway connected");
+    if (connection === "unavailable")
+      setStatus(
+        "Real-time market gateway unavailable — no delayed substitute is being shown.",
+      );
+  }, [connection]);
   const activeQuote = liveQuotes[symbol];
-  const activeLast = activeQuote ? price(activeQuote.price) : "—";
-  const activeChange = activeQuote ? percent(activeQuote.changePercent) : "—";
-  const activeUp = activeQuote ? activeQuote.change >= 0 : false;
+  const activeLast =
+    activeQuote?.price != null ? price(activeQuote.price) : "—";
+  const activeChange =
+    activeQuote?.changePercent != null
+      ? percent(activeQuote.changePercent)
+      : "—";
+  const activeUp =
+    activeQuote?.change != null ? activeQuote.change >= 0 : false;
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -296,7 +255,7 @@ export default function Home() {
             </button>
           ),
         )}
-        <span>US EQUITIES · 15 MIN DELAY</span>
+        <span>{connection === "live" ? "US EQUITIES · REAL-TIME" : "US EQUITIES · LIVE GATEWAY OFFLINE"}</span>
       </div>
       <div className="terminal-grid">
         {!hiddenPanels.includes("quote") && (
@@ -338,7 +297,7 @@ export default function Home() {
               </div>
               {quotes.map((quote) => {
                 const live = liveQuotes[quote.ticker];
-                const up = live ? live.change >= 0 : false;
+                const up = live?.change != null ? live.change >= 0 : false;
                 return (
                   <button
                     type="button"
@@ -351,11 +310,13 @@ export default function Home() {
                     }
                   >
                     <span>{quote.ticker}</span>
-                    <span>{live ? price(live.price) : "—"}</span>
+                    <span>{live?.price != null ? price(live.price) : "—"}</span>
                     <span>—</span>
                     <span>—</span>
                     <span className={up ? "gain" : "loss"}>
-                      {live ? percent(live.changePercent) : "—"}
+                      {live?.changePercent != null
+                        ? percent(live.changePercent)
+                        : "—"}
                     </span>
                     <span>
                       {live?.volume != null ? number.format(live.volume) : "—"}
@@ -610,32 +571,49 @@ export default function Home() {
             </div>
             {quotes.map(({ ticker }) => {
               const live = liveQuotes[ticker];
-              const up = live ? live.change >= 0 : false;
+              const up = live?.change != null ? live.change >= 0 : false;
               return (
-              <button
-                key={ticker}
-                onClick={() => focus(ticker)}
-              >
-                <strong>{ticker}</strong>
-                <span>{live ? price(live.price) : "—"}</span>
-                <span className={up ? "gain" : "loss"}>{live ? percent(live.changePercent) : "—"}</span>
-                <span>{live?.volume != null ? number.format(live.volume) : "—"}</span>
-              </button>
+                <button key={ticker} onClick={() => focus(ticker)}>
+                  <strong>{ticker}</strong>
+                  <span>{live?.price != null ? price(live.price) : "—"}</span>
+                  <span className={up ? "gain" : "loss"}>
+                    {live?.changePercent != null
+                      ? percent(live.changePercent)
+                      : "—"}
+                  </span>
+                  <span>
+                    {live?.volume != null ? number.format(live.volume) : "—"}
+                  </span>
+                </button>
               );
             })}
           </div>
         </Panel>
         <Panel title="SHORT INTEREST" className="short" linked={false}>
-          <p className="panel-message">Short-interest data provider is not connected yet.<br/><span>No estimated or placeholder figures are displayed.</span></p>
+          <p className="panel-message">
+            Short-interest data provider is not connected yet.
+            <br />
+            <span>No estimated or placeholder figures are displayed.</span>
+          </p>
         </Panel>
         <Panel title="MARKET PULSE" className="pulse" linked={false}>
           {benchmarks.map(({ ticker }) => {
             const live = liveQuotes[ticker];
-            const up = live ? live.change >= 0 : false;
-            return <button key={ticker} className="pulse-line" onClick={() => focus(ticker)}>
-              <b>{ticker}</b>
-              <span className={up ? "gain" : "loss"}>{live ? percent(live.changePercent) : "—"}</span>
-            </button>
+            const up = live?.change != null ? live.change >= 0 : false;
+            return (
+              <button
+                key={ticker}
+                className="pulse-line"
+                onClick={() => focus(ticker)}
+              >
+                <b>{ticker}</b>
+                <span className={up ? "gain" : "loss"}>
+                  {live?.changePercent != null
+                    ? percent(live.changePercent)
+                    : "—"}
+                </span>
+              </button>
+            );
           })}
         </Panel>
       </div>

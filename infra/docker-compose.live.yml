@@ -1,0 +1,12 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  gateway:
+    build: ../services/market-gateway
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABENTO_API_KEY: ${DATABENTO_API_KEY}
+      ATLAS_BOOTSTRAP_SYMBOLS: NVDA,MSFT,META,AMD,TSM,CRWD,AVGO,QQQ,SPY,IWM,TLT,UUP
+    ports: ["8080:8080"]
+    depends_on: [redis]
