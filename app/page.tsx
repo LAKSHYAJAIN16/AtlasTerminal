@@ -68,25 +68,6 @@ const stories = [
   "Institutional ownership filings update across technology",
   "Index futures hold gains as breadth improves",
 ];
-const movers = [
-  "INTC",
-  "NVDA",
-  "SMCI",
-  "PLTR",
-  "SOFI",
-  "HIMS",
-  "BBAI",
-  "RKLB",
-  "RDDT",
-  "IONQ",
-];
-const pulses = [
-  { ticker: "QQQ", value: "+0.89%", up: true },
-  { ticker: "SPX", value: "+0.28%", up: true },
-  { ticker: "VIX", value: "-2.40%", up: true },
-  { ticker: "US10Y", value: "+0.04%", up: false },
-  { ticker: "DXY", value: "-0.21%", up: true },
-];
 const number = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
   notation: "compact",
@@ -137,20 +118,6 @@ function Panel({
     </section>
   );
 }
-function Sparkline({ up = true }: { up?: boolean }) {
-  return (
-    <svg className="sparkline" viewBox="0 0 300 78" preserveAspectRatio="none">
-      <path
-        d={
-          up
-            ? "M0 59 L25 55 L49 61 L72 38 L99 47 L122 27 L148 40 L177 19 L203 33 L229 13 L258 27 L278 9 L300 18"
-            : "M0 18 L25 25 L49 15 L72 32 L99 24 L122 43 L148 34 L177 52 L203 44 L229 61 L258 48 L278 69 L300 58"
-        }
-      />
-    </svg>
-  );
-}
-
 export default function Home() {
   const [symbol, setSymbol] = useState("NVDA");
   const [input, setInput] = useState("");
