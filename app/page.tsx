@@ -117,6 +117,7 @@ function Panel({
 }
 export default function Home() {
   const [symbol, setSymbol] = useState("NVDA");
+  const [watchlist, setWatchlist] = useState<Quote[]>(quotes);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState(
     "Connecting to real-time market gateway…",
@@ -126,7 +127,7 @@ export default function Home() {
   const [newsSource, setNewsSource] = useState("All sources");
   const [hiddenPanels, setHiddenPanels] = useState<string[]>([]);
   const { quotes: liveQuotes, connection } = useAtlasLiveQuotes(
-    [...quotes, ...benchmarks].map(({ ticker }) => ticker),
+    [...watchlist, ...benchmarks].map(({ ticker }) => ticker),
   );
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -135,9 +136,46 @@ export default function Home() {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [filingsError, setFilingsError] = useState<string | null>(null);
   const current = useMemo(
-    () => quotes.find((quote) => quote.ticker === symbol) ?? quotes[0],
-    [symbol],
+    () =>
+      watchlist.find((quote) => quote.ticker === symbol) ??
+      watchlist[0] ?? { ticker: symbol, name: symbol },
+    [symbol, watchlist],
   );
+  useEffect(() => {
+    const saved = window.localStorage.getItem("atlas-watchlist");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as Quote[];
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => /^[A-Z.\-]{1,12}$/.test(item.ticker))
+      )
+        setWatchlist(parsed);
+    } catch {
+      /* Ignore malformed local workspace data. */
+    }
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("atlas-watchlist", JSON.stringify(watchlist));
+  }, [watchlist]);
+  const addInstrument = () => {
+    const ticker = window
+      .prompt("Add a U.S. ticker to this watchlist")
+      ?.trim()
+      .toUpperCase();
+    if (!ticker) return;
+    if (!/^[A-Z.\-]{1,12}$/.test(ticker)) {
+      setStatus("Enter a valid U.S. ticker symbol.");
+      return;
+    }
+    if (watchlist.some((item) => item.ticker === ticker)) {
+      focus(ticker);
+      return;
+    }
+    setWatchlist((items) => [...items, { ticker, name: ticker }]);
+    focus(ticker);
+    setStatus(`${ticker} added to this browser's persisted watchlist.`);
+  };
   const focus = (ticker: string) => {
     setSymbol(ticker);
     setStatus(`${ticker} focused across linked panels`);
@@ -344,7 +382,7 @@ export default function Home() {
                 <span>CHG</span>
                 <span>VOL</span>
               </div>
-              {quotes.map((quote) => {
+              {watchlist.map((quote) => {
                 const live = liveQuotes[quote.ticker];
                 const up = live?.change != null ? live.change >= 0 : false;
                 return (
@@ -374,15 +412,7 @@ export default function Home() {
                 );
               })}
             </div>
-            <button
-              type="button"
-              className="add-row"
-              onClick={() =>
-                setStatus(
-                  "Instrument entry will be enabled with persisted watchlists",
-                )
-              }
-            >
+            <button type="button" className="add-row" onClick={addInstrument}>
               Add an instrument
             </button>
           </Panel>
@@ -716,7 +746,7 @@ export default function Home() {
               <span>CHG</span>
               <span>VOL</span>
             </div>
-            {quotes.map(({ ticker }) => {
+            {watchlist.map(({ ticker }) => {
               const live = liveQuotes[ticker];
               const up = live?.change != null ? live.change >= 0 : false;
               return (
