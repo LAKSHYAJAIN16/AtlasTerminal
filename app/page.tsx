@@ -8,6 +8,7 @@ type CompanyData = {
   profile: {
     companyName?: string;
     exchange?: string;
+    cik?: string | number;
     marketCap?: number;
     industry?: string;
     sector?: string;
@@ -25,6 +26,19 @@ type CompanyData = {
     enterpriseValueMultipleTTM?: number;
     dividendYieldTTM?: number;
   } | null;
+  estimates: Array<{
+    date?: string;
+    estimatedRevenueAvg?: number;
+    estimatedEpsAvg?: number;
+  }>;
+  peers: string[];
+};
+type Filing = {
+  form?: string;
+  filingDate?: string;
+  reportDate?: string;
+  accessionNumber?: string;
+  primaryDocument?: string;
 };
 type Candle = { date: string; close: number };
 type NewsItem = {
@@ -118,6 +132,8 @@ export default function Home() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsError, setNewsError] = useState<string | null>(null);
+  const [filings, setFilings] = useState<Filing[]>([]);
+  const [filingsError, setFilingsError] = useState<string | null>(null);
   const current = useMemo(
     () => quotes.find((quote) => quote.ticker === symbol) ?? quotes[0],
     [symbol],
@@ -179,6 +195,34 @@ export default function Home() {
     };
   }, [symbol]);
   useEffect(() => {
+    const cik = company?.profile?.cik;
+    if (!cik) {
+      setFilings([]);
+      return;
+    }
+    let active = true;
+    setFilingsError(null);
+    fetch(`/api/sec/filings?cik=${encodeURIComponent(String(cik))}`)
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          filings?: Filing[];
+          error?: string;
+        };
+        if (!active) return;
+        if (!response.ok) {
+          setFilingsError(body.error ?? "SEC filings are unavailable.");
+          return;
+        }
+        setFilings(body.filings ?? []);
+      })
+      .catch(
+        () => active && setFilingsError("SEC filings connection unavailable."),
+      );
+    return () => {
+      active = false;
+    };
+  }, [company?.profile?.cik]);
+  useEffect(() => {
     let active = true;
     setNews([]);
     setNewsError(null);
@@ -219,6 +263,7 @@ export default function Home() {
   const ratio = company?.ratios;
   const compactMoney = (value?: number) =>
     value == null ? "—" : `$${number.format(value)}`;
+  const selectedEstimate = company?.estimates?.[0];
 
   return (
     <main className="atlas-terminal">
@@ -255,7 +300,11 @@ export default function Home() {
             </button>
           ),
         )}
-        <span>{connection === "live" ? "US EQUITIES · REAL-TIME" : "US EQUITIES · LIVE GATEWAY OFFLINE"}</span>
+        <span>
+          {connection === "live"
+            ? "US EQUITIES · REAL-TIME"
+            : "US EQUITIES · LIVE GATEWAY OFFLINE"}
+        </span>
       </div>
       <div className="terminal-grid">
         {!hiddenPanels.includes("quote") && (
@@ -559,6 +608,104 @@ export default function Home() {
                 <em>TTM</em>
               </article>
             </div>
+            {researchView === "Financials" && (
+              <div className="research-detail">
+                <h2>Annual financial history</h2>
+                {company?.incomeStatement?.length ? (
+                  company.incomeStatement.map((statement, index) => (
+                    <p key={index}>
+                      <span>Period {index + 1}</span>
+                      <b>
+                        Revenue {compactMoney(statement.revenue)} · Gross profit{" "}
+                        {compactMoney(statement.grossProfit)} · EPS{" "}
+                        {statement.eps?.toFixed(2) ?? "—"}
+                      </b>
+                    </p>
+                  ))
+                ) : (
+                  <p className="panel-message">
+                    Financial statements are unavailable for this symbol.
+                  </p>
+                )}
+              </div>
+            )}
+            {researchView === "Filings" && (
+              <div className="research-detail">
+                <h2>SEC EDGAR filings</h2>
+                {filingsError ? (
+                  <p className="panel-message">{filingsError}</p>
+                ) : filings.length ? (
+                  filings.slice(0, 8).map((filing, index) => {
+                    const cik = String(company?.profile?.cik ?? "").replace(
+                      /^0+/,
+                      "",
+                    );
+                    const accession = filing.accessionNumber?.replace(/-/g, "");
+                    const url =
+                      cik && accession && filing.primaryDocument
+                        ? `https://www.sec.gov/Archives/edgar/data/${cik}/${accession}/${filing.primaryDocument}`
+                        : undefined;
+                    return (
+                      <p key={`${filing.accessionNumber}-${index}`}>
+                        <span>
+                          {filing.filingDate ?? "—"} · {filing.form ?? "Filing"}
+                        </span>
+                        {url ? (
+                          <a href={url} target="_blank" rel="noreferrer">
+                            Open filing
+                          </a>
+                        ) : (
+                          <b>{filing.reportDate ?? "SEC record"}</b>
+                        )}
+                      </p>
+                    );
+                  })
+                ) : (
+                  <p className="panel-message">Loading SEC filings…</p>
+                )}
+              </div>
+            )}
+            {researchView === "Peers" && (
+              <div className="research-detail">
+                <h2>Peer universe</h2>
+                {company?.peers?.length ? (
+                  <div className="peer-list">
+                    {company.peers.map((peer) => (
+                      <button
+                        type="button"
+                        key={peer}
+                        onClick={() => focus(peer)}
+                      >
+                        {peer}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="panel-message">
+                    Peer data is unavailable for this symbol.
+                  </p>
+                )}
+              </div>
+            )}
+            {researchView === "Estimates" && (
+              <div className="research-detail">
+                <h2>Analyst estimates</h2>
+                {selectedEstimate ? (
+                  <p>
+                    <span>{selectedEstimate.date ?? "Forward period"}</span>
+                    <b>
+                      Revenue{" "}
+                      {compactMoney(selectedEstimate.estimatedRevenueAvg)} · EPS{" "}
+                      {selectedEstimate.estimatedEpsAvg?.toFixed(2) ?? "—"}
+                    </b>
+                  </p>
+                ) : (
+                  <p className="panel-message">
+                    Analyst estimates are unavailable for this symbol.
+                  </p>
+                )}
+              </div>
+            )}
           </Panel>
         )}
         <Panel title="WATCHLIST ACTIVITY" className="active" linked={false}>
@@ -620,7 +767,11 @@ export default function Home() {
       <footer className="terminal-status">
         <span>● CONNECTED</span>
         <span>SYMBOL FOCUS: {symbol}</span>
-        <span>Data is delayed. Not investment advice.</span>
+        <span>
+          {connection === "live"
+            ? "Live derived BBO feed. Not investment advice."
+            : "Live feed unavailable. Not investment advice."}
+        </span>
       </footer>
     </main>
   );
