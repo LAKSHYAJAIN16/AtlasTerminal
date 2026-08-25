@@ -1,6 +1,8 @@
 # Atlas Terminal
 
-Private, invite-only equity research workspace. The initial UI is a working terminal shell backed by a server-only market-data adapter and intentionally defaults to labelled mock data.
+Private, invite-only equity research workspace. Atlas is an original terminal
+interface with web and desktop shells; it never substitutes mock prices for a
+disconnected live feed.
 
 ## Run locally
 
@@ -22,7 +24,11 @@ Copy `.env.example` to `.env.local`.
 3. **Alpaca — individual-only development:** free live IEX or delayed SIP is useful for a personal sandbox. Do not use it as Atlas's shared product quote source without an appropriate business agreement.
 4. **Options, consolidated real-time SIP, premium news:** defer until users pay for dedicated data add-ons. These are the cost drivers that make a $19 base plan uneconomic.
 
-Without a commercial provider entitlement, `/api/market/quote?symbol=NVDA` intentionally uses seeded 15-minute delayed demo data. The SEC filing route is available at `/api/sec/filings?cik=0000320193` once `SEC_USER_AGENT` is configured.
+The web app shows live prices only when its dedicated gateway is connected. If
+the gateway is unavailable, price cells intentionally remain blank rather than
+presenting stale or generated data as current. The SEC filing route is
+available at `/api/sec/filings?cik=0000320193` once `SEC_USER_AGENT` is
+configured.
 
 Never add provider keys to client-side environment variables or commit `.env.local`.
 
@@ -30,8 +36,11 @@ Never add provider keys to client-side environment variables or commit `.env.loc
 
 - Original keyboard-first terminal shell with linked-symbol interaction
 - Watchlist, research signals, market wire, and responsive layout
-- Provider-normalized quote API with mock and FMP adapters
+- Server-only FMP/Finnhub/SEC research adapters
+- WebSocket gateway contract for live Databento US Equities Mini BBO/trade data
+- Native Windows desktop shell (`npm run tauri:dev`)
 
 ## Next slices
 
-Supabase invite-only workspaces, persisted layouts/watchlists, SEC filing browser, fundamentals, and alert delivery.
+Production deployment, persistent multi-user workspaces/alerts, an entitled
+Databento key, and the licensing/security review needed before selling access.

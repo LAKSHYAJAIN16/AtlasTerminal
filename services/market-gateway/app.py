@@ -19,6 +19,7 @@ redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
 clients: set[WebSocket] = set()
 subscriptions: dict[WebSocket, set[str]] = defaultdict(set)
 latest: dict[str, dict[str, Any]] = {}
+PRICE_SCALE = 1_000_000_000
 
 
 def quote_event(symbol: str, bid: float | None, ask: float | None, last: float | None, event_ts: int) -> dict[str, Any]:
@@ -28,7 +29,9 @@ def quote_event(symbol: str, bid: float | None, ask: float | None, last: float |
         "symbol": symbol,
         "bid": bid,
         "ask": ask,
-        "price": last if last is not None else (ask or bid),
+        # `price` is the last reported trade, never a bid or ask presented as
+        # though it were a trade. The UI leaves it blank until one is received.
+        "price": last,
         "asOf": event_ts,
         "receivedAt": int(time.time() * 1000),
         "source": "databento",
@@ -57,7 +60,14 @@ async def health() -> dict[str, Any]:
 @app.get("/snapshot")
 async def snapshot(symbols: str) -> dict[str, Any]:
     requested = [symbol.strip().upper() for symbol in symbols.split(",") if symbol.strip()]
-    rows = [latest[symbol] for symbol in requested if symbol in latest]
+    rows: list[dict[str, Any]] = []
+    for symbol in requested:
+        cached = latest.get(symbol)
+        if cached is None:
+            raw = await redis.get(f"quote:{symbol}")
+            cached = json.loads(raw) if raw else None
+        if cached is not None:
+            rows.append(cached)
     return {"quotes": rows, "source": "databento", "realtime": True}
 
 
@@ -86,27 +96,105 @@ async def ws(socket: WebSocket) -> None:
         subscriptions.pop(socket, None)
 
 
-async def databento_ingest() -> None:
-    """Runs the provider client in the worker deployment.
+def databento_price(value: Any) -> float | None:
+    """Normalize the DBN int64 price field, whose unit is 1e-9 dollars."""
+    if value is None:
+        return None
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return None
+    # DBN uses INT64_MAX as an unavailable price sentinel.
+    if value >= 9_000_000_000_000_000_000:
+        return None
+    return value / PRICE_SCALE
 
-    The Databento decoder is intentionally isolated here; instrument definitions
-    are resolved to symbols before `publish` so web/desktop clients never receive
-    provider-specific records.
+
+def run_databento_stream(loop: asyncio.AbstractEventLoop) -> None:
+    """Run Databento's blocking client outside FastAPI's event loop.
+
+    Live MBP-1 records contain only an instrument ID. SymbolMappingMsg records
+    map that ID back to the raw ticker; a browser never sees provider internals.
     """
-    # This imports only in the gateway image, never in the browser or Next.js app.
     import databento as db  # type: ignore
 
     api_key = os.environ["DATABENTO_API_KEY"]
-    tracked = [symbol for symbol in os.environ.get("ATLAS_BOOTSTRAP_SYMBOLS", "NVDA,MSFT,META,AMD,TSM,CRWD,AVGO,QQQ,SPY,IWM,TLT,UUP").split(",")]
+    tracked = [
+        symbol.strip().upper()
+        for symbol in os.environ.get(
+            "ATLAS_BOOTSTRAP_SYMBOLS",
+            "NVDA,MSFT,META,AMD,TSM,CRWD,AVGO,QQQ,SPY,IWM,TLT,UUP",
+        ).split(",")
+        if symbol.strip()
+    ]
+    symbol_directory: dict[int, str] = {}
+    last_trades: dict[str, float] = {}
     client = db.Live(key=api_key)
-    client.subscribe(dataset="EQUS.MINI", schema="mbp-1", stype_in="raw_symbol", symbols=tracked)
-    # Databento's client handles authenticated live transport and reconnects.
-    # Normalization is completed by the deployment adapter before calling publish.
-    for record in client:
-        symbol = getattr(record, "symbol", None)
+
+    def on_record(record: Any) -> None:
+        if isinstance(record, db.SymbolMappingMsg):
+            symbol_directory[record.instrument_id] = record.stype_out_symbol.upper()
+            return
+        symbol = symbol_directory.get(record.instrument_id)
         if not symbol:
-            continue
-        await publish(quote_event(symbol, getattr(record, "bid_px_00", None), getattr(record, "ask_px_00", None), None, int(getattr(record, "ts_event", time.time_ns()) / 1_000_000)))
+            return
+        if isinstance(record, db.TradeMsg):
+            trade = databento_price(getattr(record, "price", None))
+            if trade is None:
+                return
+            last_trades[symbol] = trade
+            prior = latest.get(symbol, {})
+            event = quote_event(
+                symbol,
+                prior.get("bid"),
+                prior.get("ask"),
+                trade,
+                int(record.ts_event / 1_000_000),
+            )
+            asyncio.run_coroutine_threadsafe(publish(event), loop)
+            return
+        if not isinstance(record, db.MBP1Msg):
+            return
+        level = record.levels[0]
+        bid = databento_price(getattr(level, "bid_px", None))
+        ask = databento_price(getattr(level, "ask_px", None))
+        event = quote_event(
+            symbol,
+            bid,
+            ask,
+            last_trades.get(symbol),
+            int(record.ts_event / 1_000_000),
+        )
+        asyncio.run_coroutine_threadsafe(publish(event), loop)
+
+    client.subscribe(
+        dataset="EQUS.MINI",
+        schema="mbp-1",
+        stype_in="raw_symbol",
+        symbols=tracked,
+    )
+    client.subscribe(
+        dataset="EQUS.MINI",
+        schema="trades",
+        stype_in="raw_symbol",
+        symbols=tracked,
+    )
+    client.add_callback(on_record)
+    client.start()
+    client.block_for_close()
+
+
+async def databento_ingest() -> None:
+    """Restart the blocking provider client with bounded backoff on failures."""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            await asyncio.to_thread(run_databento_stream, loop)
+        except Exception as error:
+            print(f"Databento stream stopped: {error}", flush=True)
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(1)
 
 
 @app.on_event("startup")

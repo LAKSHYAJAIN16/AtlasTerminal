@@ -516,8 +516,8 @@ export default function Home() {
                   >
                     <span>{quote.ticker}</span>
                     <span>{live?.price != null ? price(live.price) : "—"}</span>
-                    <span>—</span>
-                    <span>—</span>
+                    <span>{live?.bid != null ? price(live.bid) : "—"}</span>
+                    <span>{live?.ask != null ? price(live.ask) : "—"}</span>
                     <span className={up ? "gain" : "loss"}>
                       {live?.changePercent != null
                         ? percent(live.changePercent)
