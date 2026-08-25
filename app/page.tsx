@@ -156,7 +156,10 @@ export default function Home() {
   const current = useMemo(
     () =>
       watchlist.find((quote) => quote.ticker === symbol) ??
-      watchlist[0] ?? { ticker: symbol, name: symbol },
+      benchmarks.find((quote) => quote.ticker === symbol) ?? {
+        ticker: symbol,
+        name: symbol,
+      },
     [symbol, watchlist],
   );
   useEffect(() => {
