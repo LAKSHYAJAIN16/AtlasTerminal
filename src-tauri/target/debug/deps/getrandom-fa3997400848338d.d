@@ -1,0 +1,10 @@
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\deps\getrandom-fa3997400848338d.d: C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\lib.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\error.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\util.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\../README.md C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends\windows.rs
+
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\deps\libgetrandom-fa3997400848338d.rmeta: C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\lib.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\error.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\util.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\../README.md C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends\windows.rs
+
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\lib.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\error.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\util.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\../README.md:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.3.4\src\backends\windows.rs:

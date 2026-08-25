@@ -1,0 +1,14 @@
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\deps\thiserror-f34e24d52c3d47b7.d: C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\lib.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\aserror.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\display.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\var.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\private.rs C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\build\thiserror-f87dc82ec4790de9\out/private.rs
+
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\deps\libthiserror-f34e24d52c3d47b7.rlib: C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\lib.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\aserror.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\display.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\var.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\private.rs C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\build\thiserror-f87dc82ec4790de9\out/private.rs
+
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\deps\libthiserror-f34e24d52c3d47b7.rmeta: C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\lib.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\aserror.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\display.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\var.rs C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\private.rs C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\build\thiserror-f87dc82ec4790de9\out/private.rs
+
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\lib.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\aserror.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\display.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\var.rs:
+C:\Users\laksh\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.20\src\private.rs:
+C:\Users\laksh\Desktop\ClaudeProjects\SuperTerminal\src-tauri\target\debug\build\thiserror-f87dc82ec4790de9\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\laksh\\Desktop\\ClaudeProjects\\SuperTerminal\\src-tauri\\target\\debug\\build\\thiserror-f87dc82ec4790de9\\out
