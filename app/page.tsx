@@ -55,6 +55,7 @@ type NewsItem = {
   source?: string;
   site?: string;
 };
+type WatchlistGroup = "Core Growth" | "AI" | "Software" | "Macro";
 
 const quotes: Quote[] = [
   { ticker: "NVDA", name: "NVIDIA" },
@@ -72,6 +73,12 @@ const benchmarks: Quote[] = [
   { ticker: "TLT", name: "20+ Year Treasury" },
   { ticker: "UUP", name: "U.S. Dollar" },
 ];
+const watchlistGroups: Record<WatchlistGroup, string[]> = {
+  "Core Growth": ["NVDA", "MSFT", "META", "AMD", "TSM", "CRWD", "AVGO"],
+  AI: ["NVDA", "MSFT", "AMD", "TSM", "AVGO"],
+  Software: ["MSFT", "CRWD"],
+  Macro: benchmarks.map(({ ticker }) => ticker),
+};
 const number = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
   notation: "compact",
@@ -132,6 +139,9 @@ export default function Home() {
   const [workspace, setWorkspace] = useState("Research");
   const [researchView, setResearchView] = useState("Snapshot");
   const [newsSource, setNewsSource] = useState("All sources");
+  const [newsQuery, setNewsQuery] = useState("");
+  const [watchlistGroup, setWatchlistGroup] =
+    useState<WatchlistGroup>("Core Growth");
   const [hiddenPanels, setHiddenPanels] = useState<string[]>([]);
   const { quotes: liveQuotes, connection } = useAtlasLiveQuotes(
     [...watchlist, ...benchmarks].map(({ ticker }) => ticker),
@@ -197,11 +207,8 @@ export default function Home() {
     focus(ticker);
     setStatus(`${ticker} added to this browser's persisted watchlist.`);
   };
-  const addAlert = () => {
-    const command = window
-      .prompt("Create alert: NVDA above 200 or MSFT below 400")
-      ?.trim()
-      .toUpperCase();
+  const createAlert = (value: string) => {
+    const command = value.trim().toUpperCase();
     if (!command) return;
     const match = command.match(
       /^([A-Z.\-]{1,12})\s+(ABOVE|BELOW)\s+(\d+(?:\.\d+)?)$/,
@@ -225,14 +232,57 @@ export default function Home() {
       `${alertSymbol} ${direction.toLowerCase()} $${target} alert added.`,
     );
   };
+  const addAlert = () => {
+    const command = window.prompt(
+      "Create alert: NVDA above 200 or MSFT below 400",
+    );
+    if (command) createAlert(command);
+  };
   const focus = (ticker: string) => {
     setSymbol(ticker);
     setStatus(`${ticker} focused across linked panels`);
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const ticker = input
-      .toUpperCase()
+    const command = input.trim();
+    const normalized = command.toUpperCase();
+    if (!command) return;
+    if (normalized === "HELP") {
+      setStatus(
+        "Commands: NVDA · research MSFT · news AMD · alerts · alert NVDA above 200 · add AAPL · reset layout",
+      );
+      setInput("");
+      return;
+    }
+    if (normalized === "ALERTS") {
+      setWorkspace("Alerts");
+      setStatus("Price alerts workspace selected");
+      setInput("");
+      return;
+    }
+    if (normalized === "RESET LAYOUT") {
+      setHiddenPanels([]);
+      setStatus("Default terminal layout restored");
+      setInput("");
+      return;
+    }
+    const alertCommand = normalized.match(/^ALERT\s+(.+)$/);
+    if (alertCommand) {
+      createAlert(alertCommand[1]);
+      setInput("");
+      return;
+    }
+    const addCommand = normalized.match(/^ADD\s+([A-Z.\-]{1,12})$/);
+    if (addCommand) {
+      const ticker = addCommand[1];
+      if (!watchlist.some((item) => item.ticker === ticker))
+        setWatchlist((items) => [...items, { ticker, name: ticker }]);
+      focus(ticker);
+      setStatus(`${ticker} added to this browser's persisted watchlist.`);
+      setInput("");
+      return;
+    }
+    const ticker = normalized
       .split(/\s+/)
       .find((token) => /^[A-Z]{1,5}(?:\.[A-Z])?$/.test(token));
     if (ticker) focus(ticker);
@@ -244,7 +294,7 @@ export default function Home() {
   };
   const closePanel = (id: string) => {
     setHiddenPanels((current) => [...current, id]);
-    setStatus(`${id} panel closed. Reload to restore the default workspace.`);
+    setStatus(`${id} panel closed. Use reset layout to restore it.`);
   };
   useEffect(() => {
     if (connection === "live")
@@ -285,6 +335,17 @@ export default function Home() {
       : "—";
   const activeUp =
     activeQuote?.change != null ? activeQuote.change >= 0 : false;
+  const visibleWatchlist =
+    watchlistGroup === "Macro"
+      ? benchmarks
+      : watchlist.filter((quote) =>
+          watchlistGroups[watchlistGroup].includes(quote.ticker),
+        );
+  const filteredNews = news.filter((item) => {
+    if (!newsQuery.trim()) return true;
+    const haystack = `${item.title ?? ""} ${item.source ?? item.site ?? ""}`;
+    return haystack.toLowerCase().includes(newsQuery.trim().toLowerCase());
+  });
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -471,25 +532,21 @@ export default function Home() {
             onClose={() => closePanel("quote")}
           >
             <div className="panel-tabs">
-              <b>Core Growth</b>
-              <button
-                type="button"
-                onClick={() => setStatus("AI watchlist selected")}
-              >
-                AI
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatus("Software watchlist selected")}
-              >
-                Software
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatus("Macro watchlist selected")}
-              >
-                Macro
-              </button>
+              {(Object.keys(watchlistGroups) as WatchlistGroup[]).map(
+                (group) => (
+                  <button
+                    type="button"
+                    key={group}
+                    className={watchlistGroup === group ? "on" : ""}
+                    onClick={() => {
+                      setWatchlistGroup(group);
+                      setStatus(`${group} watchlist selected`);
+                    }}
+                  >
+                    {group}
+                  </button>
+                ),
+              )}
             </div>
             <div className="quote-table">
               <div className="quote-head">
@@ -500,7 +557,7 @@ export default function Home() {
                 <span>CHG</span>
                 <span>VOL</span>
               </div>
-              {watchlist.map((quote) => {
+              {visibleWatchlist.map((quote) => {
                 const live = liveQuotes[quote.ticker];
                 const up = live?.change != null ? live.change >= 0 : false;
                 return (
@@ -542,7 +599,12 @@ export default function Home() {
             onClose={() => closePanel("news")}
           >
             <div className="news-actions">
-              <input placeholder="Search headlines" />
+              <input
+                value={newsQuery}
+                onChange={(event) => setNewsQuery(event.target.value)}
+                placeholder="Search headlines"
+                aria-label="Search visible headlines"
+              />
               <button
                 type="button"
                 onClick={() =>
@@ -555,13 +617,10 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setStatus(
-                    "News filters will apply once the news provider is entitled",
-                  )
-                }
+                onClick={() => setNewsQuery("")}
+                disabled={!newsQuery}
               >
-                Filters
+                Clear
               </button>
             </div>
             <div className="headline-list">
@@ -574,8 +633,8 @@ export default function Home() {
                     enable this panel.
                   </span>
                 </p>
-              ) : news.length ? (
-                news.map((item, index) => (
+              ) : filteredNews.length ? (
+                filteredNews.map((item, index) => (
                   <a
                     key={item.url ?? `${item.title}-${index}`}
                     href={item.url}
@@ -914,7 +973,22 @@ export default function Home() {
       </div>
       <footer className="terminal-status">
         <span>● CONNECTED</span>
-        <span>SYMBOL FOCUS: {symbol}</span>
+        <span>
+          SYMBOL FOCUS: {symbol}
+          {hiddenPanels.length ? (
+            <button
+              type="button"
+              className="restore-layout"
+              onClick={() => {
+                setHiddenPanels([]);
+                setStatus("Default terminal layout restored");
+              }}
+            >
+              Restore {hiddenPanels.length} panel
+              {hiddenPanels.length === 1 ? "" : "s"}
+            </button>
+          ) : null}
+        </span>
         <span>
           {connection === "live"
             ? "Live derived BBO feed. Not investment advice."
