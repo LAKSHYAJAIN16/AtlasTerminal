@@ -40,6 +40,13 @@ type Filing = {
   accessionNumber?: string;
   primaryDocument?: string;
 };
+type PriceAlert = {
+  id: string;
+  symbol: string;
+  direction: "above" | "below";
+  target: number;
+  triggered: boolean;
+};
 type Candle = { date: string; close: number };
 type NewsItem = {
   title?: string;
@@ -135,6 +142,7 @@ export default function Home() {
   const [newsError, setNewsError] = useState<string | null>(null);
   const [filings, setFilings] = useState<Filing[]>([]);
   const [filingsError, setFilingsError] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const current = useMemo(
     () =>
       watchlist.find((quote) => quote.ticker === symbol) ??
@@ -158,6 +166,19 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem("atlas-watchlist", JSON.stringify(watchlist));
   }, [watchlist]);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("atlas-price-alerts");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as PriceAlert[];
+      if (Array.isArray(parsed)) setAlerts(parsed);
+    } catch {
+      /* Ignore malformed local alert data. */
+    }
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("atlas-price-alerts", JSON.stringify(alerts));
+  }, [alerts]);
   const addInstrument = () => {
     const ticker = window
       .prompt("Add a U.S. ticker to this watchlist")
@@ -175,6 +196,34 @@ export default function Home() {
     setWatchlist((items) => [...items, { ticker, name: ticker }]);
     focus(ticker);
     setStatus(`${ticker} added to this browser's persisted watchlist.`);
+  };
+  const addAlert = () => {
+    const command = window
+      .prompt("Create alert: NVDA above 200 or MSFT below 400")
+      ?.trim()
+      .toUpperCase();
+    if (!command) return;
+    const match = command.match(
+      /^([A-Z.\-]{1,12})\s+(ABOVE|BELOW)\s+(\d+(?:\.\d+)?)$/,
+    );
+    if (!match) {
+      setStatus("Use: NVDA above 200");
+      return;
+    }
+    const [, alertSymbol, direction, target] = match;
+    setAlerts((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        symbol: alertSymbol,
+        direction: direction.toLowerCase() as "above" | "below",
+        target: Number(target),
+        triggered: false,
+      },
+    ]);
+    setStatus(
+      `${alertSymbol} ${direction.toLowerCase()} $${target} alert added.`,
+    );
   };
   const focus = (ticker: string) => {
     setSymbol(ticker);
@@ -205,6 +254,28 @@ export default function Home() {
         "Real-time market gateway unavailable — no delayed substitute is being shown.",
       );
   }, [connection]);
+  useEffect(() => {
+    let hit: PriceAlert | undefined;
+    setAlerts((items) =>
+      items.map((alert) => {
+        const currentPrice = liveQuotes[alert.symbol]?.price;
+        if (alert.triggered || currentPrice == null) return alert;
+        const matches =
+          alert.direction === "above"
+            ? currentPrice >= alert.target
+            : currentPrice <= alert.target;
+        if (matches) {
+          hit = alert;
+          return { ...alert, triggered: true };
+        }
+        return alert;
+      }),
+    );
+    if (hit)
+      setStatus(
+        `ALERT: ${hit.symbol} traded ${hit.direction} $${hit.target.toFixed(2)}.`,
+      );
+  }, [liveQuotes]);
   const activeQuote = liveQuotes[symbol];
   const activeLast =
     activeQuote?.price != null ? price(activeQuote.price) : "—";
@@ -345,6 +416,53 @@ export default function Home() {
         </span>
       </div>
       <div className="terminal-grid">
+        {workspace === "Alerts" && (
+          <Panel title="PRICE ALERTS" className="active" linked={false}>
+            <div className="alert-actions">
+              <button type="button" onClick={addAlert}>
+                Add price alert
+              </button>
+              <span>
+                {connection === "live"
+                  ? "Monitoring live quotes"
+                  : "Waiting for live gateway"}
+              </span>
+            </div>
+            <div className="active-table">
+              {alerts.length ? (
+                alerts.map((alert) => (
+                  <button
+                    type="button"
+                    key={alert.id}
+                    onClick={() => focus(alert.symbol)}
+                  >
+                    <strong>{alert.symbol}</strong>
+                    <span>
+                      {alert.direction} ${alert.target.toFixed(2)}
+                    </span>
+                    <span className={alert.triggered ? "gain" : ""}>
+                      {alert.triggered ? "TRIGGERED" : "ARMED"}
+                    </span>
+                    <span
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setAlerts((items) =>
+                          items.filter((item) => item.id !== alert.id),
+                        );
+                      }}
+                    >
+                      Remove
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="panel-message">
+                  No price alerts. Add one using “NVDA above 200”.
+                </p>
+              )}
+            </div>
+          </Panel>
+        )}
         {!hiddenPanels.includes("quote") && (
           <Panel
             title="QUOTE MONITOR"
