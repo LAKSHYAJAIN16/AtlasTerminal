@@ -147,7 +147,9 @@ export default function Home() {
     [...watchlist, ...benchmarks].map(({ ticker }) => ticker),
   );
   const [company, setCompany] = useState<CompanyData | null>(null);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [chartError, setChartError] = useState<string | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [filings, setFilings] = useState<Filing[]>([]);
@@ -351,18 +353,32 @@ export default function Home() {
   });
   useEffect(() => {
     let active = true;
+    setCompanyError(null);
+    setChartError(null);
     Promise.all([
-      fetch(`/api/market/company?symbol=${symbol}`).then((response) =>
-        response.ok ? response.json() : null,
-      ),
-      fetch(`/api/market/candles?symbol=${symbol}`).then((response) =>
-        response.ok ? response.json() : null,
-      ),
-    ]).then(([companyResult, candleResult]) => {
-      if (!active) return;
-      setCompany(companyResult as CompanyData | null);
-      setCandles((candleResult?.candles ?? []) as Candle[]);
-    });
+      fetch(`/api/market/company?symbol=${symbol}`).then(async (response) => ({
+        ok: response.ok,
+        body: (await response.json()) as CompanyData & { error?: string },
+      })),
+      fetch(`/api/market/candles?symbol=${symbol}`).then(async (response) => ({
+        ok: response.ok,
+        body: (await response.json()) as { candles?: Candle[]; error?: string },
+      })),
+    ])
+      .then(([companyResult, candleResult]) => {
+        if (!active) return;
+        setCompany(companyResult.ok ? companyResult.body : null);
+        setCandles(candleResult.ok ? (candleResult.body.candles ?? []) : []);
+        setCompanyError(companyResult.ok ? null : companyResult.body.error ?? "Company research is unavailable.");
+        setChartError(candleResult.ok ? null : candleResult.body.error ?? "Historical chart data is unavailable.");
+      })
+      .catch(() => {
+        if (!active) return;
+        setCompany(null);
+        setCandles([]);
+        setCompanyError("Company research connection unavailable.");
+        setChartError("Historical chart connection unavailable.");
+      });
     return () => {
       active = false;
     };
@@ -495,10 +511,14 @@ export default function Home() {
             <div className="active-table">
               {alerts.length ? (
                 alerts.map((alert) => (
-                  <button
-                    type="button"
+                  <div
                     key={alert.id}
                     onClick={() => focus(alert.symbol)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") focus(alert.symbol);
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <strong>{alert.symbol}</strong>
                     <span>
@@ -507,17 +527,20 @@ export default function Home() {
                     <span className={alert.triggered ? "gain" : ""}>
                       {alert.triggered ? "TRIGGERED" : "ARMED"}
                     </span>
-                    <span
+                    <button
+                      type="button"
+                      className="row-action"
                       onClick={(event) => {
                         event.stopPropagation();
                         setAlerts((items) =>
                           items.filter((item) => item.id !== alert.id),
                         );
+                        setStatus(`${alert.symbol} alert removed.`);
                       }}
                     >
                       Remove
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 ))
               ) : (
                 <p className="panel-message">
@@ -742,13 +765,16 @@ export default function Home() {
                     {activeChange} today
                   </span>
                 </div>
-                <svg viewBox="0 0 640 245" preserveAspectRatio="none">
-                  <path
-                    className="grid"
-                    d="M0 35H640M0 90H640M0 145H640M0 200H640"
-                  />
-                  <path className="candle" d={chartPath} />
-                </svg>
+                {chartError ? (
+                  <p className="panel-message chart-message">{chartError}</p>
+                ) : candles.length < 2 ? (
+                  <p className="panel-message chart-message">Loading historical price series…</p>
+                ) : (
+                  <svg viewBox="0 0 640 245" preserveAspectRatio="none" aria-label={`${symbol} one-year closing-price chart`} role="img">
+                    <path className="grid" d="M0 35H640M0 90H640M0 145H640M0 200H640" />
+                    <path className="candle" d={chartPath} />
+                  </svg>
+                )}
                 <div className="chart-years">
                   <span>1Y ago</span>
                   <span>9M</span>
@@ -818,6 +844,9 @@ export default function Home() {
                 <em>TTM</em>
               </article>
             </div>
+            {companyError && researchView === "Snapshot" && (
+              <p className="panel-message">{companyError}</p>
+            )}
             {researchView === "Financials" && (
               <div className="research-detail">
                 <h2>Annual financial history</h2>
@@ -918,6 +947,7 @@ export default function Home() {
             )}
           </Panel>
         )}
+        {workspace === "Watchlists" && (
         <Panel title="WATCHLIST ACTIVITY" className="active" linked={false}>
           <div className="active-table">
             <div>
@@ -946,6 +976,49 @@ export default function Home() {
             })}
           </div>
         </Panel>
+        )}
+        {workspace === "Research" && (
+          <Panel title="RESEARCH FOCUS" className="active" linked={false}>
+            <div className="focus-summary">
+              <strong>{symbol}</strong>
+              <span>{companyName}</span>
+              <b className={activeUp ? "gain" : "loss"}>{activeLast} · {activeChange}</b>
+            </div>
+            <div className="workspace-actions">
+              <button type="button" onClick={() => setResearchView("Financials")}>Financials</button>
+              <button type="button" onClick={() => setResearchView("Filings")}>SEC filings</button>
+              <button type="button" onClick={() => setResearchView("Peers")}>Peer universe</button>
+            </div>
+            <p className="panel-message">
+              {companyError ?? "Select a research view to inspect company fundamentals, filings, estimates, and peers."}
+            </p>
+          </Panel>
+        )}
+        {workspace === "Markets" && (
+          <Panel title="MARKET SESSION" className="active" linked={false}>
+            <div className="active-table">
+              <div><span>INDEX</span><span>LAST</span><span>CHG</span><span>STATUS</span></div>
+              {benchmarks.map(({ ticker }) => {
+                const live = liveQuotes[ticker];
+                const up = live?.change != null && live.change >= 0;
+                return <button type="button" key={ticker} onClick={() => focus(ticker)}><strong>{ticker}</strong><span>{live?.price != null ? price(live.price) : "—"}</span><span className={up ? "gain" : "loss"}>{live?.changePercent != null ? percent(live.changePercent) : "—"}</span><span>{connection === "live" ? "LIVE" : "OFFLINE"}</span></button>;
+              })}
+            </div>
+          </Panel>
+        )}
+        {workspace === "Screeners" && (
+          <Panel title="LIVE SCREENER" className="active" linked={false}>
+            <div className="screener-copy">Watchlist universe · sorted by live daily return</div>
+            <div className="active-table">
+              <div><span>SYMBOL</span><span>LAST</span><span>CHG</span><span>VOL</span></div>
+              {[...watchlist].sort((a, b) => (liveQuotes[b.ticker]?.changePercent ?? -Infinity) - (liveQuotes[a.ticker]?.changePercent ?? -Infinity)).map(({ ticker }) => {
+                const live = liveQuotes[ticker]; const up = live?.change != null && live.change >= 0;
+                return <button type="button" key={ticker} onClick={() => focus(ticker)}><strong>{ticker}</strong><span>{live?.price != null ? price(live.price) : "—"}</span><span className={up ? "gain" : "loss"}>{live?.changePercent != null ? percent(live.changePercent) : "—"}</span><span>{live?.volume != null ? number.format(live.volume) : "—"}</span></button>;
+              })}
+            </div>
+            {connection !== "live" && <p className="panel-message">Connect the live gateway to run this screen. Atlas does not substitute delayed values.</p>}
+          </Panel>
+        )}
         <Panel title="SHORT INTEREST" className="short" linked={false}>
           <p className="panel-message">
             Short-interest data provider is not connected yet.
