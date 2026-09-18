@@ -2,7 +2,7 @@
 
 > A private, invite-only equity research workspace -- my own take on a Bloomberg-style terminal, web + native desktop.
 
-I'm building Atlas as a Bloomberg-style terminal with a web shell and a native desktop shell. The one rule I've held to the whole way through: it never substitutes mock prices for a disconnected live feed -- if the data isn't real, it says so instead of faking it.
+It never substitutes mock prices for a disconnected live feed. That's the one rule Atlas has held to the whole way through: a Bloomberg-style equity research terminal, web shell and native desktop shell, that says so instead of faking it whenever real data isn't available.
 
 ## Run it locally
 ```powershell
